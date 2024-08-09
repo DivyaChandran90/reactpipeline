@@ -1,0 +1,43 @@
+version: 0.2
+
+phases:
+
+  pre_build:
+    commands:
+      - echo "Pre-Build Phase - Preparing environment"
+      - COMMIT_ID=${CODEBUILD_RESOLVED_SOURCE_VERSION}
+      - TAG=$(echo $COMMIT_ID | cut -c 1-7)
+      - echo "Using TAG=$TAG"
+      - echo "Logging in to Amazon ECR.."
+      - aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
+      
+  build:
+    commands:
+      - echo "Build Phase - Building Docker image"
+      - docker build -t $REPOSITORY_URI:$TAG .
+      - echo "Post-Build Phase - Pushing Docker image to ECR"
+      - docker push $REPOSITORY_URI:$TAG
+
+  # post_build:
+  #   commands:
+  #     - echo "Post-Build Phase - Pushing Docker image to ECR"
+  #     - docker push $REPOSITORY_URI:$TAG
+  #     - echo "Assuming role for EKS access"
+  #     - CREDENTIALS=$(aws sts assume-role --role-arn $EKS_ROLE_ARN --role-session-name eks-codebuild --duration-seconds 900)
+  #     - export AWS_ACCESS_KEY_ID="$(echo ${CREDENTIALS} | jq -r '.Credentials.AccessKeyId')"
+  #     - echo $AWS_ACCESS_KEY_ID
+  #     - export AWS_SECRET_ACCESS_KEY="$(echo ${CREDENTIALS} | jq -r '.Credentials.SecretAccessKey')"
+  #     - export AWS_SESSION_TOKEN="$(echo ${CREDENTIALS} | jq -r '.Credentials.SessionToken')"
+  #     - export kube_server="$(aws eks describe-cluster --name empower-test-cluster --query "cluster.endpoint" --output text)"
+  #     - export ca_certificate="$(aws eks describe-cluster --name empower-test-cluster --query "cluster.certificateAuthority.data" --output text)"
+  #     - echo "Updating kubeconfig for EKS cluster"
+  #     - kubectl config set-cluster empower-cluster --server=${kube_server} --certificate-authority=${ca_certificate}
+  #     - aws eks update-kubeconfig --name $EKS_CLUSTERNAME --region $REGION
+  #     - export KUBECONFIG=/root/.kube/config
+  #     - kubectl config view
+  #     - kubectl config current-context
+  #     - echo "Updating Kubernetes manifest with new image tag"
+  #     - sed -i 's@CONTAINER_IMAGE@'"$REPOSITORY_URI:$TAG"'@' manifests/deployment.yaml
+  #     - echo "Deploying to EKS cluster"
+  #     - kubectl apply -f manifests/
+  #     - echo "Deployment complete!"
